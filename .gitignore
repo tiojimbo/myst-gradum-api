@@ -1,0 +1,85 @@
+# ========================================
+# Dependencias
+# ========================================
+node_modules/
+.pnp
+.pnp.js
+
+# ========================================
+# Build / Output
+# ========================================
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ========================================
+# Variaveis de ambiente
+# ========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+.env.*.local
+.env.production
+.env.staging
+
+# ========================================
+# IDE / Editor
+# ========================================
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========================================
+# Logs
+# ========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================================
+# Testes
+# ========================================
+coverage/
+.nyc_output/
+
+# ========================================
+# Docker (volumes locais)
+# ========================================
+docker-data/
+pgdata/
+
+# ========================================
+# Prisma
+# ========================================
+prisma/*.db
+prisma/*.db-journal
+
+# ========================================
+# OS
+# ========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ========================================
+# Temporarios
+# ========================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+.turbo/
