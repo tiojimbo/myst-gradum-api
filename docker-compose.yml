@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gradum-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=gradum
+      - POSTGRES_PASSWORD=gradum_dev_local
+      - POSTGRES_DB=gradum_dev
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - gradum-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gradum -d gradum_dev"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+volumes:
+  pg_data:
+    driver: local
+
+networks:
+  gradum-network:
+    driver: bridge
