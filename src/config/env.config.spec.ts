@@ -2,7 +2,6 @@ import { Logger } from '@nestjs/common';
 import { envSchema, validate } from './env.config';
 
 const ACCESS_SECRET = 'a'.repeat(64);
-const REFRESH_SECRET = 'b'.repeat(64);
 
 const VALID_ENV: Record<string, string> = {
   NODE_ENV: 'test',
@@ -12,9 +11,6 @@ const VALID_ENV: Record<string, string> = {
   DATABASE_URL: 'postgresql://gradum:gradum@localhost:5432/gradum',
   DIRECT_URL: 'postgresql://gradum:gradum@localhost:5432/gradum',
   JWT_ACCESS_SECRET: ACCESS_SECRET,
-  JWT_REFRESH_SECRET: REFRESH_SECRET,
-  JWT_ACCESS_EXPIRATION: '15m',
-  JWT_REFRESH_EXPIRATION: '7d',
   BCRYPT_ROUNDS: '12',
 };
 
@@ -25,15 +21,9 @@ const REQUIRED_KEYS = [
   'DATABASE_URL',
   'DIRECT_URL',
   'JWT_ACCESS_SECRET',
-  'JWT_REFRESH_SECRET',
 ];
 
-const KEYS_WITH_DEFAULT = [
-  'PORT',
-  'JWT_ACCESS_EXPIRATION',
-  'JWT_REFRESH_EXPIRATION',
-  'BCRYPT_ROUNDS',
-];
+const KEYS_WITH_DEFAULT = ['PORT', 'BCRYPT_ROUNDS'];
 
 function envWithout(...keys: string[]): Record<string, string> {
   const copy = { ...VALID_ENV };
@@ -79,8 +69,6 @@ describe('envSchema', () => {
     const parsed = envSchema.parse(envWithout(...KEYS_WITH_DEFAULT));
 
     expect(parsed.PORT).toBe(3001);
-    expect(parsed.JWT_ACCESS_EXPIRATION).toBe('15m');
-    expect(parsed.JWT_REFRESH_EXPIRATION).toBe('7d');
     expect(parsed.BCRYPT_ROUNDS).toBe(12);
   });
 
@@ -114,7 +102,6 @@ describe('envSchema', () => {
     const short = 'c'.repeat(63);
 
     expect(issuePaths({ ...VALID_ENV, JWT_ACCESS_SECRET: short })).toEqual(['JWT_ACCESS_SECRET']);
-    expect(issuePaths({ ...VALID_ENV, JWT_REFRESH_SECRET: short })).toEqual(['JWT_REFRESH_SECRET']);
     expect(envSchema.safeParse({ ...VALID_ENV, JWT_ACCESS_SECRET: 'c'.repeat(64) }).success).toBe(
       true,
     );

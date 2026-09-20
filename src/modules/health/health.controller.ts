@@ -1,10 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
+import { EmptyDto } from '../../common/dto/empty.dto';
+import { Body, Controller, Get, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { HealthService, HealthStatus } from './health.service';
 
 @ApiTags('health')
 @SkipThrottle({ short: true, medium: true, long: true })
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
@@ -22,7 +25,9 @@ export class HealthController {
       },
     },
   })
-  check(): HealthStatus {
+  check(@Query() _query: EmptyDto, @Body() _body: EmptyDto): Promise<HealthStatus> {
+    void _query;
+    void _body;
     return this.healthService.check();
   }
 }

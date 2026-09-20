@@ -1,14 +1,6 @@
-import {
-  ArgumentsHost,
-  BadRequestException,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
-import {
-  BusinessException,
-  DuplicateResourceException,
-} from '../exceptions/business.exception';
+import { BusinessException, DuplicateResourceException } from '../exceptions/business.exception';
 import { ApiError } from '../interfaces/api-response.interface';
 import { AllExceptionsFilter } from './http-exception.filter';
 
@@ -58,11 +50,9 @@ describe('AllExceptionsFilter', () => {
     expect(status).toBe(404);
     expect(body.statusCode).toBe(404);
     expect(body.error).toBe('Not Found');
-    expect(body.message).toBe('Cannot GET /api/v1/nao-existe');
+    expect(body.message).toBe('Rota não encontrada');
     expect(body.path).toBe('/api/v1/nao-existe');
-    expect(body.timestamp).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
-    );
+    expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
   it('traduz BusinessException para 422 com details', () => {
@@ -74,15 +64,11 @@ describe('AllExceptionsFilter', () => {
 
     expect(status).toBe(422);
     expect(body.error).toBe('Unprocessable Entity');
-    expect(body.details).toEqual([
-      { field: 'phaseId', message: 'Fase anterior nao concluida' },
-    ]);
+    expect(body.details).toEqual([{ field: 'phaseId', message: 'Fase anterior nao concluida' }]);
   });
 
   it('traduz DuplicateResourceException para 409', () => {
-    const { status, body } = run(
-      new DuplicateResourceException('Projeto', 'slug', 'algebra'),
-    );
+    const { status, body } = run(new DuplicateResourceException('Projeto', 'slug', 'algebra'));
 
     expect(status).toBe(409);
     expect(body.error).toBe('Conflict');
@@ -90,10 +76,7 @@ describe('AllExceptionsFilter', () => {
 
   it('preenche details com { field, message } em erro de validacao', () => {
     const { status, body } = run(
-      new BadRequestException([
-        'email must be an email',
-        'property extra should not exist',
-      ]),
+      new BadRequestException(['email must be an email', 'property extra should not exist']),
     );
 
     expect(status).toBe(400);
@@ -142,5 +125,12 @@ describe('AllExceptionsFilter', () => {
 
     expect('data' in body).toBe(false);
     expect('meta' in body).toBe(false);
+  });
+  it('preserva mensagem específica de recurso inexistente', () => {
+    const { body } = run(
+      new NotFoundException('Chave não encontrada'),
+      '/api/v1/api-keys/id/revoke',
+    );
+    expect(body.message).toBe('Chave não encontrada');
   });
 });

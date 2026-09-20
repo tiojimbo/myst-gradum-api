@@ -1,44 +1,23 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { createTestApp } from './helpers/auth-test-app';
+import { INestApplication, Logger } from '@nestjs/common';
 import request from 'supertest';
-import {
-  API_PREFIX,
-  VALIDATION_PIPE_OPTIONS,
-} from 'src/common/constants/app.constants';
-import { AllExceptionsFilter } from 'src/common/filters/http-exception.filter';
-import { LoggingInterceptor } from 'src/common/interceptors/logging.interceptor';
-import { ResponseInterceptor } from 'src/common/interceptors/response.interceptor';
-import { AppModule } from 'src/app.module';
 
 const ISO_8601_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 describe('Health (e2e)', () => {
   let app: INestApplication;
 
+  let test: Awaited<ReturnType<typeof createTestApp>>;
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix(API_PREFIX);
-    app.useGlobalPipes(new ValidationPipe(VALIDATION_PIPE_OPTIONS));
-    app.useGlobalFilters(new AllExceptionsFilter());
-    app.useGlobalInterceptors(
-      new LoggingInterceptor(),
-      new ResponseInterceptor(),
-    );
-    await app.init();
-  });
-
+    test = await createTestApp(false);
+    app = test.app;
+  }, 30000);
   afterAll(async () => {
-    await app.close();
+    await test?.close();
   });
 
   it('GET /api/v1/health responde 200 no envelope padrao, sem "database"', async () => {
-    const response = await request(app.getHttpServer()).get(
-      '/api/v1/health',
-    );
+    const response = await request(app.getHttpServer()).get('/api/v1/health');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -60,9 +39,7 @@ describe('Health (e2e)', () => {
   });
 
   it('GET /api/v1/nao-existe responde 404 no formato do 8.4, sem envelope', async () => {
-    const response = await request(app.getHttpServer()).get(
-      '/api/v1/nao-existe',
-    );
+    const response = await request(app.getHttpServer()).get('/api/v1/nao-existe');
 
     expect(response.status).toBe(404);
     expect(response.body).toMatchObject({
@@ -82,11 +59,23 @@ describe('Health (e2e)', () => {
 
   it('40 chamadas seguidas em /api/v1/health nunca recebem 429 (@SkipThrottle)', async () => {
     for (let i = 0; i < 40; i += 1) {
-      const response = await request(app.getHttpServer()).get(
-        '/api/v1/health',
-      );
+      const response = await request(app.getHttpServer()).get('/api/v1/health');
 
       expect(response.status).toBe(200);
+    }
+  });
+  it('404 não expõe segredo da query na resposta nem nos logs', async () => {
+    const secret = `pk_${'a'.repeat(64)}`;
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    try {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/nao-existe?key=${secret}`)
+        .expect(404);
+      expect(JSON.stringify(response.body)).not.toContain(secret);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(secret);
+      expect(response.body.message).toBe('Rota não encontrada');
+    } finally {
+      warn.mockRestore();
     }
   });
 });
