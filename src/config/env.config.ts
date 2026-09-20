@@ -9,9 +9,6 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url(),
   JWT_ACCESS_SECRET: z.string().min(64),
-  JWT_REFRESH_SECRET: z.string().min(64),
-  JWT_ACCESS_EXPIRATION: z.string().min(1).default('15m'),
-  JWT_REFRESH_EXPIRATION: z.string().min(1).default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(12).default(12),
 });
 

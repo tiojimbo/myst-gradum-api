@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   ArgumentsHost,
   Catch,
@@ -7,10 +8,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import {
-  ApiError,
-  ApiErrorDetail,
-} from '../interfaces/api-response.interface';
+import { ApiError, ApiErrorDetail } from '../interfaces/api-response.interface';
 
 interface ExceptionPayload {
   message?: string | string[];
@@ -72,18 +70,31 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const statusCode =
       exception instanceof HttpException
         ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+        : exception instanceof Prisma.PrismaClientKnownRequestError && exception.code === 'P2002'
+          ? HttpStatus.CONFLICT
+          : exception instanceof Prisma.PrismaClientKnownRequestError && exception.code === 'P2025'
+            ? HttpStatus.NOT_FOUND
+            : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const payload = toPayload(exception);
     const rawMessage = payload.message;
     const messages = Array.isArray(rawMessage) ? rawMessage : null;
     const details = messages !== null ? messages.map(toDetail) : payload.details;
 
-    let message = GENERIC_MESSAGE;
+    let message =
+      statusCode === 409
+        ? 'Registro já existe'
+        : statusCode === 404
+          ? 'Registro não encontrado'
+          : GENERIC_MESSAGE;
     if (messages !== null) {
       message = VALIDATION_MESSAGE;
     } else if (typeof rawMessage === 'string' && rawMessage.length > 0) {
-      message = rawMessage;
+      const routeMessage = `Cannot ${request.method} ${request.originalUrl || request.url}`;
+      message =
+        statusCode === HttpStatus.NOT_FOUND && rawMessage === routeMessage
+          ? 'Rota não encontrada'
+          : rawMessage;
     }
 
     const body: ApiError = {
@@ -92,17 +103,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: payload.error ?? statusText(statusCode),
       ...(details !== undefined && details.length > 0 && { details }),
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: request.url.split('?')[0],
     };
 
     if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
-      this.logger.error(
-        `[${request.method}] ${request.url} -> ${statusCode}`,
-        exception instanceof Error ? exception.stack : undefined,
-      );
+      this.logger.error(`[${request.method}] ${request.url.split('?')[0]} -> ${statusCode}`);
     } else {
       this.logger.warn(
-        `[${request.method}] ${request.url} -> ${statusCode}: ${body.message}`,
+        `[${request.method}] ${request.url.split('?')[0]} -> ${statusCode}: ${body.message}`,
       );
     }
 

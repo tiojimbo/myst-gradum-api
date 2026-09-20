@@ -1,15 +1,9 @@
-import { Role } from '../enums/role.enum';
-
+import { AuthPrincipal } from '../../modules/auth/types/auth-principal.type';
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        id: string;
-        email: string;
-        role: Role;
-      };
+      user?: AuthPrincipal;
     }
   }
 }
-
 export {};
