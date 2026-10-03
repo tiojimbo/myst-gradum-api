@@ -1,0 +1,252 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  api:
+    image: ${API_IMAGE:?API_IMAGE is required}
+    restart: always
+    expose:
+      - "3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      APP_URL: https://${API_DOMAIN:?API_DOMAIN is required}
+      CORS_ORIGINS: https://${WEB_DOMAIN:?WEB_DOMAIN is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      DIRECT_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gradum-prod-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging: *default-logging
+
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE is required}
+    restart: always
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - gradum-prod-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging: *default-logging
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pg_prod_data:/var/lib/postgresql/data
+    networks:
+      - gradum-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    logging: *default-logging
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: always
+    command: server /data --console-address ":9001"
+    expose:
+      - "9000"
+      - "9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio_data:/data
+    networks:
+      - gradum-prod-network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging: *default-logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+      WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN is required}
+      CERTBOT_CERT_NAME: ${CERTBOT_CERT_NAME:-gradum}
+      NGINX_ENVSUBST_FILTER: "API_DOMAIN|WEB_DOMAIN|CERTBOT_CERT_NAME"
+    volumes:
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - certbot_webroot:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    depends_on:
+      certbot-bootstrap:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - gradum-prod-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging: *default-logging
+
+  certbot-bootstrap:
+    image: certbot/certbot:latest
+    restart: "no"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+      WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN is required}
+      CERTBOT_CERT_NAME: ${CERTBOT_CERT_NAME:-gradum}
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mkdir -p /etc/letsencrypt/active /etc/letsencrypt/bootstrap
+        if [ ! -s /etc/letsencrypt/bootstrap/fullchain.pem ] || [ ! -s /etc/letsencrypt/bootstrap/privkey.pem ]; then
+          openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 1 \
+            -subj "/CN=$${WEB_DOMAIN}" \
+            -addext "subjectAltName=DNS:$${WEB_DOMAIN},DNS:$${API_DOMAIN}" \
+            -keyout /etc/letsencrypt/bootstrap/privkey.pem \
+            -out /etc/letsencrypt/bootstrap/fullchain.pem
+          chmod 600 /etc/letsencrypt/bootstrap/privkey.pem
+        fi
+        certificate=../bootstrap
+        if [ -s "/etc/letsencrypt/live/$${CERTBOT_CERT_NAME}/fullchain.pem" ] && [ -s "/etc/letsencrypt/live/$${CERTBOT_CERT_NAME}/privkey.pem" ]; then
+          certificate="../live/$${CERTBOT_CERT_NAME}"
+        fi
+        ln -sfn "$${certificate}/fullchain.pem" /etc/letsencrypt/active/fullchain.pem
+        ln -sfn "$${certificate}/privkey.pem" /etc/letsencrypt/active/privkey.pem
+    networks:
+      - gradum-prod-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging: *default-logging
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: always
+    pid: service:nginx
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+      WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN is required}
+      CERTBOT_CERT_NAME: ${CERTBOT_CERT_NAME:-gradum}
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL:?CERTBOT_EMAIL is required}
+    volumes:
+      - certbot_webroot:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    depends_on:
+      nginx:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        trap 'exit 0' TERM INT
+        activate_certificate() {
+          test -s "/etc/letsencrypt/live/$${CERTBOT_CERT_NAME}/fullchain.pem"
+          test -s "/etc/letsencrypt/live/$${CERTBOT_CERT_NAME}/privkey.pem"
+          ln -sfn "../live/$${CERTBOT_CERT_NAME}/fullchain.pem" /etc/letsencrypt/active/fullchain.pem
+          ln -sfn "../live/$${CERTBOT_CERT_NAME}/privkey.pem" /etc/letsencrypt/active/privkey.pem
+          kill -HUP 1
+        }
+        until certbot certonly --webroot -w /var/www/certbot \
+          --cert-name "$${CERTBOT_CERT_NAME}" \
+          --email "$${CERTBOT_EMAIL}" --agree-tos --non-interactive \
+          --keep-until-expiring -d "$${WEB_DOMAIN}" -d "$${API_DOMAIN}"; do
+          sleep 1h & wait $${!}
+        done
+        activate_certificate
+        while :; do
+          sleep 12h & wait $${!}
+          if certbot renew --webroot -w /var/www/certbot --quiet; then
+            activate_certificate
+          fi
+        done
+    networks:
+      - gradum-prod-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging: *default-logging
+
+volumes:
+  pg_prod_data:
+    driver: local
+  minio_data:
+    driver: local
+  certbot_webroot:
+    driver: local
+  certbot_certs:
+    driver: local
+
+networks:
+  gradum-prod-network:
+    driver: bridge

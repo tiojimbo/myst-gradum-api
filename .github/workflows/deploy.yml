@@ -1,0 +1,102 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [production]
+
+concurrency:
+  group: api-deploy-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production' && github.ref == 'refs/heads/main')
+    environment: ${{ github.event_name == 'push' && 'staging' || 'production' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: release
+        run: echo "channel=${{ github.event_name == 'push' && 'staging' || 'production' }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:${{ steps.release.outputs.channel }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push'
+    environment: staging
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Validate staging secrets
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+          USERNAME: ${{ secrets.STAGING_USER }}
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: test -n "$HOST" && test -n "$USERNAME" && test -n "$SSH_KEY"
+      - uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -eu
+            cd /opt/myst-gradum
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            API_IMAGE=${{ env.IMAGE_NAME }}:${{ github.sha }} docker compose -f docker-compose.prod.yml pull api
+            API_IMAGE=${{ env.IMAGE_NAME }}:${{ github.sha }} docker compose -f docker-compose.prod.yml up -d --no-deps --wait api
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production' && github.ref == 'refs/heads/main'
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Validate production secrets
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USERNAME: ${{ secrets.PRODUCTION_USER }}
+          SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+        run: test -n "$HOST" && test -n "$USERNAME" && test -n "$SSH_KEY"
+      - uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            set -eu
+            cd /opt/myst-gradum
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            API_IMAGE=${{ env.IMAGE_NAME }}:${{ github.sha }} docker compose -f docker-compose.prod.yml pull api
+            API_IMAGE=${{ env.IMAGE_NAME }}:${{ github.sha }} docker compose -f docker-compose.prod.yml up -d --no-deps --wait api
