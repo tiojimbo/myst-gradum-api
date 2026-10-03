@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: api-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  NODE_ENV: test
+  PORT: "3001"
+  APP_URL: http://localhost:3001
+  CORS_ORIGINS: http://localhost:3000
+  DATABASE_URL: postgresql://gradum_test:gradum_test_local@127.0.0.1:55443/gradum_auth_test
+  DIRECT_URL: postgresql://gradum_test:gradum_test_local@127.0.0.1:55443/gradum_auth_test
+  JWT_ACCESS_SECRET: ci-only-secret-ci-only-secret-ci-only-secret-ci-only-secret-ci-only-secret
+  BCRYPT_ROUNDS: "12"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx eslint "{src,apps,libs,test}/**/*.ts"
+      - run: git diff --exit-code
+      - run: npm audit --audit-level=critical
+
+  test-api:
+    runs-on: ubuntu-latest
+    needs: quality
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gradum_test
+          POSTGRES_PASSWORD: gradum_test_local
+          POSTGRES_DB: gradum_auth_test
+        ports:
+          - 55443:5432
+        options: >-
+          --health-cmd "pg_isready -U gradum_test -d gradum_auth_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test -- --runInBand
+      - run: npm run test:e2e -- --runInBand
+
+  build-check:
+    runs-on: ubuntu-latest
+    needs: test-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run build
+      - run: test -f dist/main.js
