@@ -18,9 +18,8 @@ model Organization {
 }
 model User {
  id String @id @default(uuid()) @db.Uuid
- singletonKey Int @unique @default(1) @map("singleton_key")
- organizationId String? @map("organization_id") @db.Uuid
- organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+ organizationId String @map("organization_id") @db.Uuid
+ organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
  email String @unique
  name String
  hashedPassword String @map("hashed_password")

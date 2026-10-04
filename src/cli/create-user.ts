@@ -3,8 +3,8 @@ import { ConsoleLogger, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { AppModule } from '../src/app.module';
-import { UsersService } from '../src/modules/users/users.service';
+import { AppModule } from '../app.module';
+import { UsersService } from '../modules/users/users.service';
 
 async function readPassword(): Promise<string> {
   if (!stdin.isTTY) throw new Error('Use um terminal interativo');
@@ -40,14 +40,16 @@ async function readPassword(): Promise<string> {
   });
 }
 
-export async function createOwner(): Promise<void> {
-  const logger = new Logger('OwnerCreate');
+export async function createUser(): Promise<void> {
+  const logger = new Logger('UserCreate');
   if (!stdin.isTTY || process.argv.length > 2)
     throw new Error('Execute sem argumentos em um terminal interativo');
   const prompt = createInterface({ input: stdin, output: stdout });
+  let organizationSlug: string;
   let email: string;
   let name: string;
   try {
+    organizationSlug = await prompt.question('Identificador da organização: ');
     email = await prompt.question('E-mail: ');
     name = await prompt.question('Nome: ');
   } finally {
@@ -56,19 +58,18 @@ export async function createOwner(): Promise<void> {
   const password = await readPassword();
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
   try {
-    await app.get(UsersService).createOwner({ email, name, password });
+    await app.get(UsersService).createUser({ organizationSlug, email, name, password });
     Logger.overrideLogger(new ConsoleLogger());
-    logger.log('Proprietário criado');
+    logger.log('Usuário criado');
   } finally {
     await app.close();
   }
 }
+
 if (require.main === module) {
-  void createOwner().catch(() => {
+  void createUser().catch(() => {
     Logger.overrideLogger(new ConsoleLogger());
-    new Logger('OwnerCreate').error(
-      'Não foi possível criar o proprietário. Verifique os dados e se a conta já existe.',
-    );
+    new Logger('UserCreate').error('Usuário não criado. Confira os dados informados.');
     process.exitCode = 1;
   });
 }

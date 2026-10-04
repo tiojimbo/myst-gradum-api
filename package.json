@@ -16,8 +16,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node --files prisma/seed.ts",
-    "owner:create": "ts-node --files scripts/create-owner.ts",
-    "owner:associate-organization": "node dist/cli/associate-legacy-owner.js"
+    "organization:create": "node dist/cli/create-organization.js",
+    "user:create": "node dist/cli/create-user.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.22",

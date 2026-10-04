@@ -17,7 +17,7 @@ export class SessionsRepository {
         userId,
         revokedAt: null,
         deletedAt: null,
-        user: { isActive: true, deletedAt: null },
+        user: { isActive: true, deletedAt: null, organization: { deletedAt: null } },
       },
       include: { user: true },
     });
@@ -25,9 +25,15 @@ export class SessionsRepository {
     return session;
   }
   async currentUser() {
-    const { userId } = this.scope.where();
+    const { userId, organizationId } = this.scope.principal();
     const user = await this.prisma.user.findFirst({
-      where: { id: userId, isActive: true, deletedAt: null },
+      where: {
+        id: userId,
+        organizationId,
+        isActive: true,
+        deletedAt: null,
+        organization: { deletedAt: null },
+      },
     });
     if (!user) throw new UnauthorizedException('Credencial inválida');
     return user;

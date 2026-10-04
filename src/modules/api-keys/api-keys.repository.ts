@@ -18,11 +18,17 @@ export class ApiKeysRepository {
         keyHash,
         revokedAt: null,
         deletedAt: null,
-        user: { isActive: true, deletedAt: null },
+        user: { isActive: true, deletedAt: null, organization: { deletedAt: null } },
       },
+      include: { user: true },
     });
     if (!record) throw new UnauthorizedException('Credencial inválida');
-    return { userId: record.userId, credentialType: 'api-key', apiKeyId: record.id };
+    return {
+      organizationId: record.user.organizationId,
+      userId: record.userId,
+      credentialType: 'api-key',
+      apiKeyId: record.id,
+    };
   }
   create(data: { name: string; keyHash: string; keySuffix: string }) {
     return this.prisma.apiKey.create({ data: { ...data, userId: this.scope.where().userId } });
