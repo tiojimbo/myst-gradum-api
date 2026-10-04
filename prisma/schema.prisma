@@ -6,9 +6,21 @@ datasource db {
  url = env("DATABASE_URL")
  directUrl = env("DIRECT_URL")
 }
+model Organization {
+ id String @id @default(uuid()) @db.Uuid
+ name String
+ slug String @unique
+ createdAt DateTime @default(now()) @map("created_at")
+ updatedAt DateTime @updatedAt @map("updated_at")
+ deletedAt DateTime? @map("deleted_at")
+ users User[]
+ @@map("organizations")
+}
 model User {
  id String @id @default(uuid()) @db.Uuid
  singletonKey Int @unique @default(1) @map("singleton_key")
+ organizationId String? @map("organization_id") @db.Uuid
+ organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
  email String @unique
  name String
  hashedPassword String @map("hashed_password")
@@ -19,6 +31,7 @@ model User {
  deletedAt DateTime? @map("deleted_at")
  sessions AuthSession[]
  apiKeys ApiKey[]
+ @@index([organizationId, deletedAt])
  @@map("users")
 }
 model AuthSession {
