@@ -45,7 +45,7 @@ describe('Auth HTTP', () => {
   });
   it('nega ausência de credencial e rejeita identidade extra', async () => {
     await request(test.app.getHttpServer()).get('/api/v1/auth/me').expect(401);
-    for (const field of ['userId', 'ownerId', 'workspaceId', 'role'])
+    for (const field of ['userId', 'organizationId', 'ownerId', 'workspaceId', 'role'])
       await get(`/auth/me?${field}=invasor`).expect(400);
     await post('/auth/logout').send({ userId: 'invasor' }).expect(400);
   });
@@ -107,5 +107,67 @@ describe('Auth HTTP', () => {
       .post('/api/v1/auth/login')
       .send({ email: ownerInput.email, password: ownerInput.password })
       .expect(429);
+  });
+});
+
+describe('Autenticação vinculada à organização persistida', () => {
+  let test: Awaited<ReturnType<typeof createTestApp>>;
+  beforeAll(async () => {
+    test = await createTestApp();
+    await test.users.createOrganization({ name: 'Outra', slug: 'outra-organizacao' });
+    await test.users.createUser({
+      organizationSlug: 'outra-organizacao',
+      email: 'outra@example.test',
+      name: 'Outra pessoa',
+      password: ownerInput.password,
+    });
+  }, 30000);
+  afterAll(async () => {
+    await test?.close();
+  });
+
+  it('duas organizações autenticam pessoas distintas sem trocar perfil', async () => {
+    const first = await request(test.app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: ownerInput.email, password: ownerInput.password })
+      .expect(200);
+    const second = await request(test.app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'outra@example.test', password: ownerInput.password })
+      .expect(200);
+    const profiles = await Promise.all(
+      [first.body.data.accessToken, second.body.data.accessToken].map((token: string) =>
+        request(test.app.getHttpServer())
+          .get('/api/v1/auth/me')
+          .set('Authorization', `Bearer ${token}`),
+      ),
+    );
+    expect(profiles.map((profile) => profile.body.data.email)).toEqual([
+      ownerInput.email,
+      'outra@example.test',
+    ]);
+  });
+
+  it('organização excluída invalida uma sessão sem afetar a outra', async () => {
+    const first = await request(test.app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: ownerInput.email, password: ownerInput.password })
+      .expect(200);
+    const second = await request(test.app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'outra@example.test', password: ownerInput.password })
+      .expect(200);
+    await test.prisma.organization.update({
+      where: { id: test.organization!.id },
+      data: { deletedAt: new Date() },
+    });
+    await request(test.app.getHttpServer())
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${first.body.data.accessToken}`)
+      .expect(401);
+    await request(test.app.getHttpServer())
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${second.body.data.accessToken}`)
+      .expect(200);
   });
 });

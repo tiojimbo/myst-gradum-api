@@ -31,6 +31,11 @@ export class JwtStrategy {
     )
       throw new UnauthorizedException('Credencial inválida');
     const session = await this.sessions.authenticate(payload.jti, payload.sub);
-    return { userId: session.userId, credentialType: 'jwt', sessionId: session.id };
+    return {
+      organizationId: session.user.organizationId,
+      userId: session.userId,
+      credentialType: 'jwt',
+      sessionId: session.id,
+    };
   }
 }

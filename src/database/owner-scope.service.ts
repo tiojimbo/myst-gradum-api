@@ -4,12 +4,21 @@ import { Request } from 'express';
 @Injectable({ scope: Scope.REQUEST })
 export class OwnerScopeService {
   constructor(@Inject(REQUEST) private readonly request: Request) {}
-  where(): { userId: string; deletedAt: null } {
-    if (!this.request.user) throw new UnauthorizedException();
-    return { userId: this.request.user.userId, deletedAt: null };
+  where(): {
+    userId: string;
+    user: { organizationId: string; organization: { deletedAt: null } };
+    deletedAt: null;
+  } {
+    const { userId, organizationId } = this.principal();
+    return { userId, user: { organizationId, organization: { deletedAt: null } }, deletedAt: null };
+  }
+  personalWhere(): { organizationId: string; userId: string; deletedAt: null } {
+    const { organizationId, userId } = this.principal();
+    return { organizationId, userId, deletedAt: null };
   }
   principal() {
-    this.where();
-    return this.request.user!;
+    const principal = this.request.user;
+    if (!principal?.userId || !principal.organizationId) throw new UnauthorizedException();
+    return principal;
   }
 }

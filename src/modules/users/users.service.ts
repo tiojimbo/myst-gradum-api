@@ -3,31 +3,35 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { hash } from 'bcrypt';
 import { UsersRepository } from './users.repository';
-import { CreateOwnerDto } from './dto/create-owner.dto';
-import { AssociateLegacyOwnerDto } from './dto/associate-legacy-owner.dto';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 @Injectable()
 export class UsersService {
   constructor(private readonly repository: UsersRepository) {}
-  async createOwner(input: CreateOwnerDto) {
-    const dto = plainToInstance(CreateOwnerDto, input);
-    if (
-      (await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).length ||
-      Buffer.byteLength(dto.password ?? '') > 72
-    ) {
-      throw new BadRequestException('Dados do proprietário inválidos');
-    }
-    return this.repository.createOwner({
-      name: dto.name.trim(),
-      email: dto.email.trim().toLowerCase(),
-      hashedPassword: await hash(dto.password, 12),
-    });
-  }
-  async associateLegacyOwner(input: AssociateLegacyOwnerDto) {
-    const dto = plainToInstance(AssociateLegacyOwnerDto, input);
+  async createOrganization(input: CreateOrganizationDto) {
+    const dto = plainToInstance(CreateOrganizationDto, input);
     dto.name = dto.name?.trim();
     dto.slug = dto.slug?.trim().toLowerCase();
     if ((await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).length)
       throw new BadRequestException('Dados da organização inválidos');
-    return this.repository.associateLegacyOwner({ name: dto.name, slug: dto.slug });
+    return this.repository.createOrganization({ name: dto.name, slug: dto.slug });
+  }
+  async createUser(input: CreateUserDto) {
+    const dto = plainToInstance(CreateUserDto, input);
+    dto.organizationSlug = dto.organizationSlug?.trim().toLowerCase();
+    dto.name = dto.name?.trim();
+    dto.email = dto.email?.trim().toLowerCase();
+    if (
+      (await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).length ||
+      Buffer.byteLength(dto.password ?? '') > 72
+    ) {
+      throw new BadRequestException('Dados do usuário inválidos');
+    }
+    return this.repository.createUser({
+      organizationSlug: dto.organizationSlug,
+      name: dto.name,
+      email: dto.email,
+      hashedPassword: await hash(dto.password, 12),
+    });
   }
 }

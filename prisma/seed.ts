@@ -3,7 +3,8 @@ import { ConsoleLogger, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { createOwner } from '../scripts/create-owner';
+import { createOrganization } from '../src/cli/create-organization';
+import { createUser } from '../src/cli/create-user';
 async function seed(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
   try {
@@ -12,7 +13,8 @@ async function seed(): Promise<void> {
   } finally {
     await app.close();
   }
-  await createOwner();
+  await createOrganization();
+  await createUser();
 }
 void seed().catch(() => {
   Logger.overrideLogger(new ConsoleLogger());

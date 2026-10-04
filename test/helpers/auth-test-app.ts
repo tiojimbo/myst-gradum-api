@@ -12,6 +12,7 @@ import { LoggingInterceptor } from '../../src/common/interceptors/logging.interc
 import { VALIDATION_PIPE_OPTIONS } from '../../src/common/constants/app.constants';
 import { ConfigService } from '@nestjs/config';
 export const ownerInput = {
+  organizationSlug: 'organizacao-teste',
   email: 'owner@example.test',
   name: 'Proprietário de teste',
   password: 'SenhaDeTeste123!',
@@ -37,12 +38,16 @@ export async function createTestApp(provision = true) {
   await app.init();
   const prisma = app.get(PrismaService);
   const users = app.get(UsersService);
-  const owner = provision ? await users.createOwner(ownerInput) : undefined;
+  const organization = provision
+    ? await users.createOrganization({ name: 'Organização de teste', slug: ownerInput.organizationSlug })
+    : undefined;
+  const owner = provision ? await users.createUser(ownerInput) : undefined;
   return {
     app,
     prisma,
     users,
     owner,
+    organization,
     config: app.get(ConfigService),
     async close() {
       const url = app.get(ConfigService).getOrThrow<string>('database.url');

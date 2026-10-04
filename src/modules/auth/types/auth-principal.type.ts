@@ -1,3 +1,3 @@
 export type AuthPrincipal =
-  | { userId: string; credentialType: 'jwt'; sessionId: string }
-  | { userId: string; credentialType: 'api-key'; apiKeyId: string };
+  | { organizationId: string; userId: string; credentialType: 'jwt'; sessionId: string }
+  | { organizationId: string; userId: string; credentialType: 'api-key'; apiKeyId: string };
