@@ -6,7 +6,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   constructor(config: ConfigService) {
     super({ datasources: { db: { url: config.getOrThrow<string>('database.url') } }, log: [] });
     this.$use(async (params, next) => {
-      if (['User', 'AuthSession', 'ApiKey'].includes(params.model ?? '')) {
+      if (['Organization', 'User', 'AuthSession', 'ApiKey'].includes(params.model ?? '')) {
         if (params.action === 'delete' || params.action === 'deleteMany') {
           params.action = params.action === 'delete' ? 'update' : 'updateMany';
           params.args.data = { deletedAt: new Date() };
