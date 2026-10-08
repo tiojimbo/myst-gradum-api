@@ -12,6 +12,7 @@ import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { CredentialsGuard } from './modules/auth/guards/credentials.guard';
 import { HealthModule } from './modules/health/health.module';
+import { AiModule } from './modules/ai/ai.module';
 import { CompetenciesModule } from './modules/competencies/competencies.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { CompetenciesModule } from './modules/competencies/competencies.module';
     ApiKeysModule,
     IntegrationsModule,
     HealthModule,
+    AiModule,
     CompetenciesModule,
   ],
   providers: [
