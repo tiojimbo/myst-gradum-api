@@ -1,7 +1,20 @@
 import { Logger, ExecutionContext } from '@nestjs/common';
 import { of } from 'rxjs';
-import { LoggingInterceptor } from './logging.interceptor';
+import { LoggingInterceptor, sanitizeForLogging } from './logging.interceptor';
 describe('LoggingInterceptor', () => {
+  it('remove chave OpenRouter e conteúdo de mensagens aninhadas sem alterar o original', () => {
+    const data = {
+      OPENROUTER_API_KEY: 'chave-privada',
+      nested: { messages: [{ content: 'nota-privada' }] },
+      promptName: 'base.system',
+      size: 12,
+    };
+    const sanitized = sanitizeForLogging(data);
+    expect(JSON.stringify(sanitized)).not.toContain('chave-privada');
+    expect(JSON.stringify(sanitized)).not.toContain('nota-privada');
+    expect(sanitized).toMatchObject({ promptName: 'base.system', size: 12 });
+    expect(data.OPENROUTER_API_KEY).toBe('chave-privada');
+  });
   it('não registra corpo, query ou autorização', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const debug = jest.spyOn(Logger.prototype, 'debug').mockImplementation();

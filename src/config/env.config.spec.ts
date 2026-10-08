@@ -42,6 +42,28 @@ function issuePaths(raw: Record<string, unknown>): string[] {
 }
 
 describe('envSchema', () => {
+  it('desliga IA por padrão sem exigir credencial', () => {
+    expect(envSchema.parse(VALID_ENV)).toMatchObject({
+      AI_ENABLED: false,
+      AI_TIMEOUT_MS: 60000,
+      AI_MAX_TOKENS: 4000,
+    });
+  });
+  it('interpreta false sem coerção para true', () => {
+    expect(envSchema.parse({ ...VALID_ENV, AI_ENABLED: 'false' })).toMatchObject({
+      AI_ENABLED: false,
+    });
+  });
+  it('exige chave e modelo quando IA está ligada', () => {
+    expect(issuePaths({ ...VALID_ENV, AI_ENABLED: 'true' }).sort()).toEqual([
+      'AI_MODEL_DEFAULT',
+      'OPENROUTER_API_KEY',
+    ]);
+  });
+  it('rejeita flag desconhecida e orçamento acima de sessenta segundos', () => {
+    expect(issuePaths({ ...VALID_ENV, AI_ENABLED: 'yes' })).toEqual(['AI_ENABLED']);
+    expect(issuePaths({ ...VALID_ENV, AI_TIMEOUT_MS: '60001' })).toEqual(['AI_TIMEOUT_MS']);
+  });
   it('aceita o ambiente completo', () => {
     const parsed = envSchema.safeParse(VALID_ENV);
 
