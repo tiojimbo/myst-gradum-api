@@ -12,6 +12,7 @@ import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { CredentialsGuard } from './modules/auth/guards/credentials.guard';
 import { HealthModule } from './modules/health/health.module';
+import { CompetenciesModule } from './modules/competencies/competencies.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HealthModule } from './modules/health/health.module';
     ApiKeysModule,
     IntegrationsModule,
     HealthModule,
+    CompetenciesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: CredentialsGuard, scope: Scope.REQUEST },

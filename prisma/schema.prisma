@@ -14,6 +14,8 @@ model Organization {
  updatedAt DateTime @updatedAt @map("updated_at")
  deletedAt DateTime? @map("deleted_at")
  users User[]
+ skills Skill[]
+ skillDependencies SkillDependency[]
  @@map("organizations")
 }
 model User {
@@ -30,8 +32,66 @@ model User {
  deletedAt DateTime? @map("deleted_at")
  sessions AuthSession[]
  apiKeys ApiKey[]
+ skills Skill[]
+ skillDependencies SkillDependency[]
  @@index([organizationId, deletedAt])
+ @@unique([id, organizationId])
  @@map("users")
+}
+
+enum KnowledgeKind {
+ FACTUAL
+ CONCEPTUAL
+ PROCEDURAL
+ SKILL
+ VISUAL
+ CREATIVE
+ TRANSFER
+ MOTOR
+}
+
+model Skill {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @map("organization_id") @db.Uuid
+ userId String @map("user_id") @db.Uuid
+ organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+ user User @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+ name String
+ description String?
+ domainSlug String? @map("domain_slug")
+ kind KnowledgeKind
+ targetLevel Int @default(3) @map("target_level")
+ masteryCriterion String @map("mastery_criterion")
+ sortOrder Int @default(0) @map("sort_order")
+ parentId String? @map("parent_id") @db.Uuid
+ parent Skill? @relation("SkillHierarchy", fields: [parentId, organizationId, userId], references: [id, organizationId, userId], onDelete: Restrict)
+ children Skill[] @relation("SkillHierarchy")
+ requirements SkillDependency[] @relation("SkillRequirements")
+ requiredBy SkillDependency[] @relation("SkillPrerequisiteFor")
+ createdAt DateTime @default(now()) @map("created_at")
+ updatedAt DateTime @updatedAt @map("updated_at")
+ deletedAt DateTime? @map("deleted_at")
+ @@unique([id, organizationId, userId])
+ @@index([organizationId, userId, parentId, deletedAt])
+ @@map("skills")
+}
+
+model SkillDependency {
+ id String @id @default(uuid()) @db.Uuid
+ organizationId String @map("organization_id") @db.Uuid
+ userId String @map("user_id") @db.Uuid
+ organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+ user User @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+ skillId String @map("skill_id") @db.Uuid
+ prerequisiteId String @map("prerequisite_id") @db.Uuid
+ skill Skill @relation("SkillRequirements", fields: [skillId, organizationId, userId], references: [id, organizationId, userId], onDelete: Restrict)
+ prerequisite Skill @relation("SkillPrerequisiteFor", fields: [prerequisiteId, organizationId, userId], references: [id, organizationId, userId], onDelete: Restrict)
+ createdAt DateTime @default(now()) @map("created_at")
+ updatedAt DateTime @updatedAt @map("updated_at")
+ deletedAt DateTime? @map("deleted_at")
+ @@unique([skillId, prerequisiteId])
+ @@index([organizationId, userId, deletedAt])
+ @@map("skill_dependencies")
 }
 model AuthSession {
  id String @id @default(uuid()) @db.Uuid
